@@ -134,7 +134,7 @@ export const createSale = asyncHandler(async (req, res) => {
   const paymentMode = resolvePaymentMode(req.body);
   const status = resolveInvoiceStatus(
     req.body,
-    balanceAmount <= 0 ? "paid" : Number(paidAmount) > 0 ? "partial" : "unpaid"
+    paymentMode || (balanceAmount <= 0 ? "paid" : Number(paidAmount) > 0 ? "partial" : "unpaid")
   );
 
   const invoice = await SalesInvoice.create({
@@ -215,7 +215,7 @@ export const updateSale = asyncHandler(async (req, res) => {
   const paymentMode = resolvePaymentMode(req.body, invoice.paymentMode);
   const status = resolveInvoiceStatus(
     req.body,
-    balanceAmount <= 0 ? "paid" : Number(paidAmount) > 0 ? "partial" : "unpaid"
+    paymentMode || (balanceAmount <= 0 ? "paid" : Number(paidAmount) > 0 ? "partial" : "unpaid")
   );
 
   await adjustSalesStock(req.user._id, invoice.items, calculatedItems);
@@ -250,7 +250,7 @@ export const updateSaleStatus = asyncHandler(async (req, res) => {
   invoice.paymentMode = resolvePaymentMode(req.body, invoice.paymentMode);
   invoice.status = resolveInvoiceStatus(
     req.body,
-    invoice.balanceAmount <= 0 ? "paid" : invoice.paidAmount > 0 ? "partial" : "unpaid"
+    invoice.paymentMode || (invoice.balanceAmount <= 0 ? "paid" : invoice.paidAmount > 0 ? "partial" : "unpaid")
   );
   await invoice.save();
   res.json(invoice);
