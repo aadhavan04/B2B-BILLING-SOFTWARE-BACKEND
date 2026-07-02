@@ -64,8 +64,12 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-connectDB().then(() => {
+const startServer = async () => {
+  await connectDB();
+
   app.listen(port, () => {
     console.log(`B2B Billing API running on http://localhost:${port}`);
   });
-});
+};
+
+startServer();

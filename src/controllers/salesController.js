@@ -6,6 +6,23 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { calculateItems, roundMoney } from "../utils/calcTotals.js";
 import mongoose from "mongoose";
 
+const INVOICE_STATUS_VALUES = new Set(["draft", "unpaid", "partial", "paid", "cancelled", "cash", "credit", "upi", "card", "bank"]);
+const PAYMENT_MODE_VALUES = new Set(["cash", "credit", "upi", "card", "bank"]);
+
+const resolvePaymentMode = (body, fallback = "cash") => {
+  const candidate = body.paymentMode ?? body.paymentType ?? body.mode ?? body.status;
+  if (typeof candidate === "string" && PAYMENT_MODE_VALUES.has(candidate)) return candidate;
+  if (typeof body.paymentMode === "string" && PAYMENT_MODE_VALUES.has(body.paymentMode)) return body.paymentMode;
+  return fallback;
+};
+
+const resolveInvoiceStatus = (body, fallback) => {
+  if (typeof body.status === "string" && INVOICE_STATUS_VALUES.has(body.status)) {
+    return body.status;
+  }
+  return fallback;
+};
+
 const nextInvoiceNo = async (owner) => {
   const count = await SalesInvoice.countDocuments({ owner });
   return `INV-${String(count + 1).padStart(5, "0")}`;
@@ -114,6 +131,11 @@ export const createSale = asyncHandler(async (req, res) => {
   const { items: calculatedItems, subtotal, gstTotal } = calculateItems(items);
   const grandTotal = roundMoney(subtotal + gstTotal - Number(discount || 0));
   const balanceAmount = roundMoney(grandTotal - Number(paidAmount || 0));
+  const paymentMode = resolvePaymentMode(req.body);
+  const status = resolveInvoiceStatus(
+    req.body,
+    balanceAmount <= 0 ? "paid" : Number(paidAmount) > 0 ? "partial" : "unpaid"
+  );
 
   const invoice = await SalesInvoice.create({
     owner: req.user._id,
@@ -130,7 +152,8 @@ export const createSale = asyncHandler(async (req, res) => {
     grandTotal,
     paidAmount: roundMoney(paidAmount),
     balanceAmount,
-    status: balanceAmount <= 0 ? "paid" : Number(paidAmount) > 0 ? "partial" : "unpaid",
+    paymentMode,
+    status,
     notes: req.body.notes,
   });
 
@@ -189,6 +212,11 @@ export const updateSale = asyncHandler(async (req, res) => {
   const paidAmount = req.body.paidAmount ?? invoice.paidAmount;
   const grandTotal = roundMoney(subtotal + gstTotal - Number(discount || 0));
   const balanceAmount = roundMoney(grandTotal - Number(paidAmount || 0));
+  const paymentMode = resolvePaymentMode(req.body, invoice.paymentMode);
+  const status = resolveInvoiceStatus(
+    req.body,
+    balanceAmount <= 0 ? "paid" : Number(paidAmount) > 0 ? "partial" : "unpaid"
+  );
 
   await adjustSalesStock(req.user._id, invoice.items, calculatedItems);
 
@@ -202,7 +230,8 @@ export const updateSale = asyncHandler(async (req, res) => {
   invoice.grandTotal = grandTotal;
   invoice.paidAmount = roundMoney(paidAmount);
   invoice.balanceAmount = balanceAmount;
-  invoice.status = req.body.status || (balanceAmount <= 0 ? "paid" : Number(paidAmount) > 0 ? "partial" : "unpaid");
+  invoice.paymentMode = paymentMode;
+  invoice.status = status;
   invoice.notes = req.body.notes ?? invoice.notes;
 
   await invoice.save();
@@ -218,7 +247,11 @@ export const updateSaleStatus = asyncHandler(async (req, res) => {
 
   invoice.paidAmount = roundMoney(req.body.paidAmount ?? invoice.paidAmount);
   invoice.balanceAmount = roundMoney(invoice.grandTotal - invoice.paidAmount);
-  invoice.status = req.body.status || (invoice.balanceAmount <= 0 ? "paid" : invoice.paidAmount > 0 ? "partial" : "unpaid");
+  invoice.paymentMode = resolvePaymentMode(req.body, invoice.paymentMode);
+  invoice.status = resolveInvoiceStatus(
+    req.body,
+    invoice.balanceAmount <= 0 ? "paid" : invoice.paidAmount > 0 ? "partial" : "unpaid"
+  );
   await invoice.save();
   res.json(invoice);
 });

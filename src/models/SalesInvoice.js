@@ -45,7 +45,12 @@ const salesInvoiceSchema = new mongoose.Schema(
     grandTotal: { type: Number, required: true, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },
     balanceAmount: { type: Number, default: 0 },
-    status: { type: String, enum: ["draft", "unpaid", "partial", "paid", "cancelled"], default: "unpaid" },
+    status: {
+      type: String,
+      enum: ["draft", "unpaid", "partial", "paid", "cancelled", "cash", "credit", "upi", "card", "bank"],
+      default: "unpaid",
+    },
+    paymentMode: { type: String, enum: ["cash", "credit", "upi", "card", "bank"], default: "cash" },
     notes: { type: String, trim: true },
   },
   { timestamps: true }
